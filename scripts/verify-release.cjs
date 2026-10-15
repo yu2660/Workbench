@@ -1,0 +1,13 @@
+const fs=require('node:fs');const path=require('node:path');const crypto=require('node:crypto');const assert=require('node:assert/strict');const asar=require('@electron/asar');
+const root=path.join(__dirname,'..'),bundle=path.join(root,'dist','win-unpacked','resources','app.asar');const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+const files=['src/main.cjs','src/library.cjs','src/documents.cjs','src/preload.cjs','renderer/index.html','renderer/styles.css','renderer/app.js','assets/workbench.ico'];
+for(const file of files)assert.equal(hash(asar.extractFile(bundle,file)),hash(fs.readFileSync(path.join(root,file))),file+' differs in package');
+assert.equal(hash(fs.readFileSync(path.join(root,'dist/win-unpacked/resources/app.asar.unpacked/scripts/powerpoint.ps1'))),hash(fs.readFileSync(path.join(root,'scripts/powerpoint.ps1'))));
+assert.equal(asar.listPackage(bundle).filter(x=>x.includes('@napi-rs')).length,0);
+for(const file of ['LICENSE.electron.txt','LICENSES.chromium.html','THIRD_PARTY_NOTICES.md','LICENSE.Workbench.txt'])assert.ok(fs.existsSync(path.join(root,'dist','win-unpacked',file)),file+' missing');
+assert.equal(hash(fs.readFileSync(path.join(root,'dist','win-unpacked','THIRD_PARTY_NOTICES.md'))),hash(fs.readFileSync(path.join(root,'THIRD_PARTY_NOTICES.md'))));
+assert.equal(hash(fs.readFileSync(path.join(root,'dist','win-unpacked','LICENSE.Workbench.txt'))),hash(fs.readFileSync(path.join(root,'LICENSE'))));
+for(const file of fs.readdirSync(path.join(root,'licenses')))assert.equal(hash(fs.readFileSync(path.join(root,'licenses',file))),hash(fs.readFileSync(path.join(root,'dist','win-unpacked','licenses',file))));
+const checksums=['Workbench Setup 0.1.0.exe','win-unpacked/Workbench.exe'].map(file=>hash(fs.readFileSync(path.join(root,'dist',file)))+'  '+file);fs.writeFileSync(path.join(root,'dist','SHA256SUMS.txt'),checksums.join('\n')+'\n');
+fs.writeFileSync(path.join(root,'test-output','release-result.json'),JSON.stringify({passed:true,sourceMatch:files,officeBridgeMatch:true,electronLicenseFiles:true,optionalNativeCanvasExcluded:true,sha256:checksums},null,2));
+console.log('RELEASE PASS: packaged source matches, Office bridge, licenses, exclusions and SHA-256');

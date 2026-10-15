@@ -1,0 +1,30 @@
+node_modules/
+dist/
+.cache/
+test-output/
+*.log
+
+# Local previews and private course-library data
+design/
+.workbench/
+**/.workbench/
+preview-cache/
+settings.json
+*.tmp
+
+# Credentials and machine-specific settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+*.p12
+.npmrc
+.netrc
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+__pycache__/
