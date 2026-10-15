@@ -2,7 +2,15 @@
 
 一个本机离线的 Windows 课程资料管理与阅读工具。把分散的课程资料放到清晰的课程书架中，随时从上次阅读的位置继续。
 
-**当前版本：0.1.0，早期可用版本。** 本仓库包含源码、图标、测试、设计文档和开源许可声明，不包含个人课程文件、开发机配置、测试运行产物或安装包。当前请按下方步骤自行构建。
+**当前版本：0.1.0，早期可用版本。** 普通用户可以直接下载安装包，无需安装 Node.js 或自行编译。源码、图标、测试和文档位于仓库，安装包通过 GitHub Releases 分发。
+
+## 下载安装
+
+1. [下载 Windows x64 安装包](https://github.com/yu2660/Workbench/releases/download/v0.1.0/Workbench-Setup-0.1.0.exe)，或打开 [Release 页面](https://github.com/yu2660/Workbench/releases/latest)。
+2. 运行安装包，选择安装位置，按向导完成安装。
+3. 打开 Workbench，选择专用资料库文件夹，然后创建课程、添加文件。
+
+适用于 Windows 10/11 x64；PPT 阅读和写回另需已安装的 Microsoft PowerPoint。安装包未签名，Windows 可能提示未知发布者。可下载同一 Release 的 `SHA256SUMS.txt`，使用 `Get-FileHash -Algorithm SHA256` 核对安装包。首次使用前请阅读下方文件移动与批注说明。
 
 ![课程书架，展示内容均为生成的演示资料](docs/images/home.png)
 
@@ -56,7 +64,7 @@ npm run dist
 - `Workbench Setup 0.1.0.exe`：NSIS 安装包，支持选择安装位置和创建桌面快捷方式。
 - `win-unpacked/Workbench.exe`：解包后的程序；请保留整个 `win-unpacked` 文件夹一起使用。
 
-程序运行不需要额外安装 Node.js。安装包当前未进行代码签名，Windows 可能显示未知发布者。代码仓库不保存构建缓存或安装文件；尚未发布 GitHub Release。
+程序运行不需要额外安装 Node.js。安装包当前未进行代码签名，Windows 可能显示未知发布者。代码仓库不保存构建缓存或安装文件；可直接安装的程序和校验和通过 [GitHub Releases](https://github.com/yu2660/Workbench/releases) 提供。
 
 ## 验证
 
