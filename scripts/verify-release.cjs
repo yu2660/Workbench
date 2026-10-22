@@ -8,6 +8,7 @@ for(const file of ['LICENSE.electron.txt','LICENSES.chromium.html','THIRD_PARTY_
 assert.equal(hash(fs.readFileSync(path.join(root,'dist','win-unpacked','THIRD_PARTY_NOTICES.md'))),hash(fs.readFileSync(path.join(root,'THIRD_PARTY_NOTICES.md'))));
 assert.equal(hash(fs.readFileSync(path.join(root,'dist','win-unpacked','LICENSE.Workbench.txt'))),hash(fs.readFileSync(path.join(root,'LICENSE'))));
 for(const file of fs.readdirSync(path.join(root,'licenses')))assert.equal(hash(fs.readFileSync(path.join(root,'licenses',file))),hash(fs.readFileSync(path.join(root,'dist','win-unpacked','licenses',file))));
-const checksums=['Workbench Setup 0.1.0.exe','win-unpacked/Workbench.exe'].map(file=>hash(fs.readFileSync(path.join(root,'dist',file)))+'  '+file);fs.writeFileSync(path.join(root,'dist','SHA256SUMS.txt'),checksums.join('\n')+'\n');
+const version=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;
+const checksums=[`Workbench Setup ${version}.exe`,'win-unpacked/Workbench.exe'].map(file=>hash(fs.readFileSync(path.join(root,'dist',file)))+'  '+file);fs.writeFileSync(path.join(root,'dist','SHA256SUMS.txt'),checksums.join('\n')+'\n');
 fs.writeFileSync(path.join(root,'test-output','release-result.json'),JSON.stringify({passed:true,sourceMatch:files,officeBridgeMatch:true,electronLicenseFiles:true,optionalNativeCanvasExcluded:true,sha256:checksums},null,2));
 console.log('RELEASE PASS: packaged source matches, Office bridge, licenses, exclusions and SHA-256');

@@ -7,7 +7,7 @@ const colors = ['#698b78','#718bb3','#b98b65','#9683b4','#ba7d86','#6f9b9c'];
 const categories = ['课程资料','作业','其他资料'];
 let state = { root:null,courses:[],files:[],folders:[],warnings:[] };
 let view = 'home', courseId = null, category = categories[0], sub = '', query = '', scope = 'all', sort = 'name', desc = false;
-let activeTab = null, toastTimer, modalResolve;
+let activeTab = null, toastTimer, modalResolve, presentationTab = null;
 const tabs = new Map();
 const workspace = $('#workspace');
 function toast(message, error = false) { $('#toast').textContent = message; $('#toast').className = error ? 'error' : ''; $('#toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').hidden = true, error ? 8500 : 3500); }
@@ -114,6 +114,7 @@ document.addEventListener('click',e=>{
   const fm=e.target.closest('[data-folder-menu]');if(fm)safe(()=>fileMenu(null,fm.dataset.folderMenu));
 });
 document.addEventListener('keydown',e=>{
+  if(view==='reader'&&tabs.get(activeTab)?.handleKey(e))return;
   if(e.ctrlKey&&e.key.toLowerCase()==='k'){e.preventDefault();$('#search').focus();}
   if((e.key==='Enter'||e.key===' ')&&e.target.matches('[role=button]')){e.preventDefault();e.target.click();}
   if(view==='reader'&&e.ctrlKey&&e.key.toLowerCase()==='z'&&!e.target.matches('input,textarea')){e.preventDefault();tabs.get(activeTab)?.undo();}
@@ -124,10 +125,34 @@ workspace.addEventListener('dragleave',e=>{if(!workspace.contains(e.relatedTarge
 workspace.addEventListener('drop',async e=>{e.preventDefault();workspace.classList.remove('drop-active');if(view!=='course'||query)return;await safe(async()=>{const drop=await api.prepareDrop(Array.from(e.dataTransfer.files));if(!drop.count)return;const data=await modal(`<h2>移动 ${drop.count} 项到资料库？</h2><p>文件会从原位置移到“${esc(currentCourse().name)} / ${esc(category)}${sub?' / '+esc(sub):''}”，只保留一份。</p>`,'移动并导入');if(data){state=await busy('正在移动资料…',()=>api.importDrop(drop.token,courseId,category,sub));render();}});});
 
 class ReaderTab {
-  constructor(file,data,pdf) { this.file=file;this.pdf=pdf;this.kind=data.kind;this.hash=data.hash;this.annotations=data.annotations;this.page=data.page;this.total=data.total;this.zoom=1;this.history=[];this.dirty=false;this.saving=Promise.resolve();this.pages=new Map();this.renderTasks=new Set();this.container=document.createElement('section');this.container.className='reader';this.build(); }
+  constructor(file,data,pdf) { this.file=file;this.pdf=pdf;this.kind=data.kind;this.hash=data.hash;this.annotations=data.annotations;this.page=data.page;this.total=data.total;this.zoom=1;this.history=[];this.dirty=false;this.saving=Promise.resolve();this.pages=new Map();this.renderTasks=new Set();this.layoutGeneration=0;this.presenting=false;this.clickToAdvance=false;this.container=document.createElement('section');this.container.className='reader';this.build(); }
   build() {
     this.container.innerHTML=`<div class="reader-tabs"></div><div class="reader-toolbar"><button data-reader="back" title="回到课程">← 返回课程</button><span class="sep"></span><button data-reader="prev">‹</button><input class="page-number" type="number" min="1" max="${this.total}" value="${this.page}" aria-label="当前页码"><small>/ ${this.total}</small><button data-reader="next">›</button><span class="sep"></span><select class="zoom" aria-label="阅读缩放"><option value="0.75">75%</option><option value="1" selected>100%</option><option value="1.25">125%</option><option value="1.5">150%</option></select><button data-reader="highlight" title="选中文字后高亮">▰ 高亮</button><button data-reader="underline" title="选中文字后加下划线">U̲ 划线</button><button data-reader="note" title="选中文字添加便签，或在当前页添加">▧ 便签</button><button data-reader="undo">↶ 撤销</button><button data-reader="retry">保存</button><span class="save-status">所有批注已保存</span></div><div class="reader-body"><aside class="thumbnails"></aside><div class="page-scroll"></div><aside class="annotation-panel"><h3>批注与便签 <span class="annotation-count"></span></h3><div class="annotation-list"></div></aside></div><footer class="reader-footer"><span>${this.kind==='ppt'?'PPT 静态阅读 · 批注写回原课件':'PDF 阅读 · 批注写回原文件'}</span><span>选中文字进行标注 · Ctrl Z 撤销</span></footer>`;
     this.scroller=this.container.querySelector('.page-scroll');this.thumbs=this.container.querySelector('.thumbnails');
+    this.container.querySelector('.reader-body').append(this.thumbs);
+    this.thumbs.setAttribute('aria-label','页面缩略图预览');
+    this.scroller.tabIndex=0;
+    this.container.classList.toggle('is-ppt',this.kind==='ppt');
+    if(this.kind==='ppt') {
+      this.container.querySelector('.save-status').insertAdjacentHTML('beforebegin','<button data-reader="click-mode" aria-pressed="false" title="开启后单击页面翻到下一页；需要选字批注时可关闭">点击翻页：关</button><button data-reader="present" title="全屏显示课件，单击或按方向键翻页，Esc 退出">⛶ 全屏放映</button>');
+      this.container.querySelector('.reader-footer span:last-child').textContent='← → / PageUp PageDown 翻页 · F5 全屏 · Ctrl Z 撤销';
+      const controls=document.createElement('div');controls.className='presentation-controls';controls.hidden=true;
+      controls.innerHTML='<span>单击下一页 · 右键上一页</span><button data-reader="prev" aria-label="上一页">‹</button><span class="presentation-page"></span><button data-reader="next" aria-label="下一页">›</button><button data-reader="exit-present">退出全屏 (Esc)</button>';
+      this.container.append(controls);
+    }
+    this.scroller.addEventListener('click',e=>{
+      if(this.kind!=='ppt'||(!this.presenting&&!this.clickToAdvance)||e.button!==0||e.detail>1||e.ctrlKey||e.metaKey||e.altKey)return;
+      if(!this.presenting&&(e.target.closest('[data-note-id]')||!window.getSelection()?.isCollapsed))return;
+      this.go(this.page+1);
+    });
+    this.scroller.addEventListener('contextmenu',e=>{if(this.presenting){e.preventDefault();this.go(this.page-1);}});
+    this.resizeObserver=new ResizeObserver(()=>{
+      const size=[this.scroller.clientWidth,this.scroller.clientHeight];
+      if(this.lastSize?.every((v,i)=>Math.abs(v-size[i])<2))return;
+      this.lastSize=size;clearTimeout(this.resizeTimer);
+      if(this.pages.size&&this.container.isConnected)this.resizeTimer=setTimeout(()=>safe(()=>this.layout()),100);
+    });
+    this.resizeObserver.observe(this.scroller);
     // Preserve the text selection while clicking a formatting button.
     this.container.querySelector('.reader-toolbar').addEventListener('mousedown',e=>{if(e.target.closest('[data-reader]')&&!['prev','next','back'].includes(e.target.closest('[data-reader]').dataset.reader))e.preventDefault();});
     this.container.addEventListener('click',e=>safe(async()=>{
@@ -138,6 +163,13 @@ class ReaderTab {
       if(['highlight','underline','note'].includes(command))return this.addMark(command);
       if(command==='undo')return this.undo();
       if(command==='retry')return this.save();
+      if(command==='present')return this.setPresentation(true);
+      if(command==='exit-present')return this.setPresentation(false);
+      if(command==='click-mode'){
+        this.clickToAdvance=!this.clickToAdvance;
+        const button=this.container.querySelector('[data-reader="click-mode"]');button.setAttribute('aria-pressed',String(this.clickToAdvance));button.textContent='点击翻页：'+(this.clickToAdvance?'开':'关');
+        this.scroller.classList.toggle('click-to-advance',this.clickToAdvance);return;
+      }
       const page=e.target.closest('[data-page-go]');if(page)this.go(Number(page.dataset.pageGo));
       const del=e.target.closest('[data-mark-delete]');if(del){this.checkpoint();this.annotations=this.annotations.filter(a=>a.id!==del.dataset.markDelete);this.changed();}
       const edit=e.target.closest('[data-mark-edit]');if(edit)await this.editMark(edit.dataset.markEdit);
@@ -156,15 +188,19 @@ class ReaderTab {
     this.updatePanel();
   }
   async layout() {
+    const generation=++this.layoutGeneration;
     this.observer?.disconnect();for(const task of this.renderTasks)task.cancel();this.renderTasks.clear();
     for(const p of this.pages.values())p.text?.cancel();this.pages.clear();this.scroller.replaceChildren();this.thumbs.replaceChildren();
     const first=await this.pdf.getPage(1), base=first.getViewport({scale:1});
-    this.baseScale=Math.min(1.2,Math.max(0.45,(this.scroller.clientWidth-60)/base.width))*this.zoom;
+    if(this.destroyed||generation!==this.layoutGeneration)return;
+    this.baseScale=this.kind==='ppt'
+      ? Math.max(.05,Math.min((this.scroller.clientWidth-48)/base.width,(this.scroller.clientHeight-48)/base.height))*(this.presenting?1:this.zoom)
+      : Math.min(1.2,Math.max(0.45,(this.scroller.clientWidth-60)/base.width))*this.zoom;
     this.observer=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting)safe(()=>this.renderPage(Number(e.target.dataset.number)));},{root:this.scroller,rootMargin:'500px'});
     for(let n=1;n<=this.total;n++){
       const el=document.createElement('div');el.className='pdf-page';el.dataset.number=String(n);el.style.width=base.width*this.baseScale+'px';el.style.height=base.height*this.baseScale+'px';el.style.setProperty('--total-scale-factor',String(this.baseScale));
       if(this.kind==='ppt')el.hidden=n!==this.page;
-      el.innerHTML='<div class="marks"></div>';this.scroller.append(el);this.pages.set(n,{el,rendering:false,rendered:false});this.observer.observe(el);
+      el.innerHTML='<div class="marks"></div>';this.scroller.append(el);this.pages.set(n,{el,scale:this.baseScale,rendering:false,rendered:false});this.observer.observe(el);
       const thumb=document.createElement('button');thumb.className='thumb';thumb.dataset.pageGo=String(n);thumb.innerHTML=`<canvas width="96" height="${Math.round(96*base.height/base.width)}"></canvas><span>${n}</span>`;this.thumbs.append(thumb);
     }
     this.thumbObserver?.disconnect();this.thumbObserver=new IntersectionObserver(entries=>{for(const e of entries)if(e.isIntersecting){this.thumbObserver.unobserve(e.target);safe(()=>this.renderThumb(Number(e.target.dataset.pageGo),e.target));}},{root:this.thumbs,rootMargin:'100px'});
@@ -175,14 +211,37 @@ class ReaderTab {
   async renderPage(n) {
     const item=this.pages.get(n);if(!item||item.rendering||item.rendered)return;item.rendering=true;
     const page=await this.pdf.getPage(n);if(this.pages.get(n)!==item)return;
-    const viewport=page.getViewport({scale:this.baseScale});item.el.style.width=viewport.width+'px';item.el.style.height=viewport.height+'px';
+    const viewport=page.getViewport({scale:item.scale});item.el.style.width=viewport.width+'px';item.el.style.height=viewport.height+'px';
     const canvas=document.createElement('canvas'),dpr=Math.min(2,devicePixelRatio);canvas.width=Math.ceil(viewport.width*dpr);canvas.height=Math.ceil(viewport.height*dpr);item.el.prepend(canvas);
     const task=page.render({canvasContext:canvas.getContext('2d'),viewport,transform:dpr===1?undefined:[dpr,0,0,dpr,0,0]});this.renderTasks.add(task);
     try { await task.promise;this.renderTasks.delete(task);if(this.pages.get(n)!==item)return;const text=document.createElement('div');text.className='textLayer';item.el.append(text);item.text=new pdfjs.TextLayer({textContentSource:page.streamTextContent(),container:text,viewport});await item.text.render();item.rendered=true; }
     catch(e){if(e.name!=='RenderingCancelledException'&&e.name!=='AbortException')throw e;}finally{item.rendering=false;this.renderTasks.delete(task);}
   }
-  setPage(n){this.page=n;this.container.querySelector('.page-number').value=String(n);for(const t of this.thumbs.children)t.classList.toggle('active',Number(t.dataset.pageGo)===n);const values={page:n,total:this.total,lastOpened:Date.now()};Object.assign(this.file,values);const entry=state.files.find(f=>f.id===this.file.id);if(entry)Object.assign(entry,values);safe(()=>api.progress(this.file.id,n,this.total));}
-  go(n){n=Math.max(1,Math.min(this.total,Math.trunc(n)||1));this.setPage(n);if(this.kind==='ppt'){for(const [p,item]of this.pages)item.el.hidden=p!==n;this.scroller.scrollTop=0;}else this.pages.get(n)?.el.scrollIntoView({block:'start'});safe(()=>this.renderPage(n));this.thumbs.querySelector(`[data-page-go="${n}"]`)?.scrollIntoView({block:'nearest'});}
+  setPage(n){this.page=n;this.container.querySelector('.page-number').value=String(n);for(const t of this.thumbs.children)t.classList.toggle('active',Number(t.dataset.pageGo)===n);for(const button of this.container.querySelectorAll('[data-reader="prev"]'))button.disabled=n===1;for(const button of this.container.querySelectorAll('[data-reader="next"]'))button.disabled=n===this.total;const label=this.container.querySelector('.presentation-page');if(label)label.textContent=n+' / '+this.total;const values={page:n,total:this.total,lastOpened:Date.now()};Object.assign(this.file,values);const entry=state.files.find(f=>f.id===this.file.id);if(entry)Object.assign(entry,values);safe(()=>api.progress(this.file.id,n,this.total));}
+  go(n){n=Math.max(1,Math.min(this.total,Math.trunc(n)||1));this.setPage(n);if(this.kind==='ppt'){for(const [p,item]of this.pages)item.el.hidden=p!==n;this.scroller.scrollTop=0;}else this.pages.get(n)?.el.scrollIntoView({block:'start'});safe(()=>this.renderPage(n));if(!this.presenting)this.thumbs.querySelector(`[data-page-go="${n}"]`)?.scrollIntoView({block:'nearest'});}
+  handleKey(e) {
+    if(this.kind!=='ppt'||$('#modal').open)return false;
+    if(e.key==='Escape'&&this.presenting){e.preventDefault();safe(()=>this.setPresentation(false));return true;}
+    if(e.ctrlKey||e.metaKey||e.altKey)return this.presenting;
+    if(e.target.closest('input,textarea,select,a,[contenteditable]'))return false;
+    if(e.key==='F5'){e.preventDefault();safe(()=>this.setPresentation(!this.presenting));return true;}
+    if(e.target.closest('button')&&[' ','Enter'].includes(e.key))return false;
+    const target={ArrowRight:this.page+1,ArrowDown:this.page+1,PageDown:this.page+1,' ':this.page+1,Enter:this.page+1,ArrowLeft:this.page-1,ArrowUp:this.page-1,PageUp:this.page-1,Backspace:this.page-1,Home:1,End:this.total}[e.key];
+    if(target===undefined)return false;
+    e.preventDefault();this.go(target);return true;
+  }
+  async setPresentation(enabled,native=true) {
+    if(this.kind!=='ppt'||this.destroyed||enabled===this.presenting)return;
+    this.presenting=enabled;presentationTab=enabled?this:null;
+    this.container.classList.toggle('presenting',enabled);
+    this.container.querySelector('.presentation-controls').hidden=!enabled;
+    window.getSelection()?.removeAllRanges();
+    try { if(native)await api.setReaderFullscreen(enabled); }
+    catch(e){this.presenting=false;presentationTab=null;this.container.classList.remove('presenting');this.container.querySelector('.presentation-controls').hidden=true;throw e;}
+    if(this.destroyed)return;
+    await new Promise(resolve=>requestAnimationFrame(resolve));
+    await this.layout();this.scroller.focus({preventScroll:true});
+  }
   selection() {
     const selection=window.getSelection();if(!selection||selection.isCollapsed||!selection.rangeCount)return null;const range=selection.getRangeAt(0);const start=(range.startContainer.nodeType===1?range.startContainer:range.startContainer.parentElement)?.closest('.pdf-page'),end=(range.endContainer.nodeType===1?range.endContainer:range.endContainer.parentElement)?.closest('.pdf-page');
     if(!start||start!==end||!this.scroller.contains(start))throw Error('请在同一页内选择文字后批注');
@@ -199,7 +258,7 @@ class ReaderTab {
   save(){clearTimeout(this.saveTimer);this.saving=this.saving.then(async()=>{if(!this.dirty)return;const snapshot=JSON.stringify(this.annotations);this.status('正在写回原文件…');try{const result=await api.saveAnnotations(this.file.id,this.hash,JSON.parse(snapshot));this.hash=result.hash;if(JSON.stringify(this.annotations)===snapshot)this.dirty=false;this.status(this.dirty?'有新的更改等待保存':'所有批注已保存');}catch(e){this.status('保存失败 · 点击保存重试',true);toast(e.message,true);}});return this.saving;}
   drawMarks(){for(const [n,item]of this.pages){const marks=item.el.querySelector('.marks');marks.innerHTML=this.annotations.filter(a=>a.page===n).map(a=>(a.type==='note'?a.rects.slice(0,1):a.rects).map(r=>`<span class="mark ${a.type}" ${a.type==='note'?`data-note-id="${a.id}" title="${esc(a.text)}"`:''} style="left:${r.x*100}%;top:${r.y*100}%;width:${r.w*100}%;height:${r.h*100}%">${a.type==='note'?'≡':''}</span>`).join('')).join('');}}
   updatePanel(){this.container.querySelector('.annotation-count').textContent=`(${this.annotations.length})`;this.container.querySelector('.annotation-list').innerHTML=this.annotations.length?this.annotations.map(a=>`<div class="annotation-item"><small>第 ${a.page} 页 · ${{highlight:'高亮',underline:'下划线',note:'便签'}[a.type]}</small><p>${esc(a.text)||'无文字说明'}</p><button data-mark-jump="${a.page}">定位</button><button data-mark-edit="${a.id}">编辑</button><button data-mark-delete="${a.id}">删除</button></div>`).join(''):'<p class="muted" style="line-height:1.9">选中文字，然后点击高亮或划线。<br><br>也可以给当前页面留一张便签。</p>';}
-  destroy(){this.destroyed=true;this.observer?.disconnect();this.thumbObserver?.disconnect();clearTimeout(this.saveTimer);for(const p of this.pages.values())p.text?.cancel();for(const t of this.renderTasks)t.cancel();this.pdf.loadingTask.destroy().catch(()=>{});this.container.remove();}
+  destroy(){if(this.presenting){presentationTab=null;safe(()=>api.setReaderFullscreen(false));}this.destroyed=true;this.resizeObserver?.disconnect();clearTimeout(this.resizeTimer);this.observer?.disconnect();this.thumbObserver?.disconnect();clearTimeout(this.saveTimer);for(const p of this.pages.values())p.text?.cancel();for(const t of this.renderTasks)t.cancel();this.pdf.loadingTask.destroy().catch(()=>{});this.container.remove();}
 }
 async function openFile(id) {
   if(tabs.has(id)){activeTab=id;view='reader';query='';$('#search').value='';render();return;}
@@ -214,4 +273,5 @@ function renderReader(){const active=tabs.get(activeTab)||tabs.values().next().v
 document.addEventListener('click',e=>safe(async()=>{const close=e.target.closest('[data-close-tab]');if(close){const id=close.dataset.closeTab,t=tabs.get(id);await t.save();if(t.dirty){const discard=await modal('<h2>批注还没有保存</h2><p>原文件可能已被其他程序修改，或暂时无法写入。取消可保留当前批注并继续重试；放弃后可以重新打开最新文件。</p>','放弃未保存批注并关闭');if(!discard)return;t.dirty=false;}t.destroy();tabs.delete(id);if(activeTab===id)activeTab=tabs.keys().next().value;if(!tabs.size)navigate('home');else renderReader();return;}const tab=e.target.closest('[data-tab]');if(tab){activeTab=tab.dataset.tab;view='reader';render();}if(e.target.closest('[data-tab-home]'))navigate('home');}));
 window.addEventListener('beforeunload',e=>{if([...tabs.values()].some(t=>t.dirty)){e.preventDefault();e.returnValue='';}});
 api.onChange(()=>safe(refresh));
+api.onFullscreenChange(enabled=>{if(!enabled&&presentationTab)safe(()=>presentationTab.setPresentation(false,false));});
 await safe(refresh);

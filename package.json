@@ -1,6 +1,6 @@
 {
   "name": "workbench-courses",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "离线课程资料管理与阅读",
   "author": "Workbench",
   "license": "MIT",
@@ -10,6 +10,7 @@
     "start": "electron .",
     "test": "node --test tests/core.test.cjs",
     "test:e2e": "node tests/e2e.cjs",
+    "test:navigation": "node tests/reader-navigation.cjs",
     "dist": "electron-builder --win nsis --x64",
     "licenses": "node scripts/licenses.cjs"
   },

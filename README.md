@@ -2,11 +2,11 @@
 
 一个本机离线的 Windows 课程资料管理与阅读工具。把分散的课程资料放到清晰的课程书架中，随时从上次阅读的位置继续。
 
-**当前版本：0.1.0，早期可用版本。** 普通用户可以直接下载安装包，无需安装 Node.js 或自行编译。源码、图标、测试和文档位于仓库，安装包通过 GitHub Releases 分发。
+**当前版本：0.1.1，早期可用版本。** 普通用户可以直接下载安装包，无需安装 Node.js 或自行编译。源码、图标、测试和文档位于仓库，安装包通过 GitHub Releases 分发。
 
 ## 下载安装
 
-1. [下载 Windows x64 安装包](https://github.com/yu2660/Workbench/releases/download/v0.1.0/Workbench-Setup-0.1.0.exe)，或打开 [Release 页面](https://github.com/yu2660/Workbench/releases/latest)。
+1. [下载 Windows x64 安装包](https://github.com/yu2660/Workbench/releases/download/v0.1.1/Workbench-Setup-0.1.1.exe)，或打开 [Release 页面](https://github.com/yu2660/Workbench/releases/latest)。
 2. 运行安装包，选择安装位置，按向导完成安装。
 3. 打开 Workbench，选择专用资料库文件夹，然后创建课程、添加文件。
 
@@ -21,10 +21,18 @@
 - 按文件名搜索全部课程或当前课程；按名称、添加时间、修改时间或最近打开排序。
 - 同步资料库目录变化，支持资源管理器定位和使用外部软件打开。
 - 在 app 内阅读 PDF 与 PPT/PPTX，支持多个标签、缩略图、缩放和页码跳转。
+- 缩略图预览位于阅读区最右侧；PPT 支持整页适配、全屏放映、鼠标点击和键盘翻页。
 - 自动记录每份文件的当前页码，列表显示「当前页 / 总页」；启动时进入书架。
 - 选中文字高亮、加下划线、添加中文便签；支持编辑、删除、自动保存和会话内撤销。
 
 ![阅读与批注，展示内容均为生成的演示资料](docs/images/reader.png)
+
+### PPT 翻页与全屏
+
+- 点击工具栏「全屏放映」或按 F5：课件按比例适配整个屏幕，隐藏课程、预览和批注侧栏。
+- 全屏时单击页面进入下一页，右键返回上一页；Esc 或「退出全屏」回到普通阅读并保留当前页码与缩放设置。
+- 普通阅读可开启「点击翻页」，默认关闭以便选字批注；拖选文字不会翻页。
+- 方向键、PageUp/PageDown、空格可翻页；Home/End 跳到首尾页。输入页码或编辑文字时不会抢占键盘。
 
 ## 使用前需要了解
 
@@ -61,7 +69,7 @@ npm run dist
 
 生成结果位于 `dist/`：
 
-- `Workbench Setup 0.1.0.exe`：NSIS 安装包，支持选择安装位置和创建桌面快捷方式。
+- `Workbench Setup 0.1.1.exe`：NSIS 安装包，支持选择安装位置和创建桌面快捷方式。
 - `win-unpacked/Workbench.exe`：解包后的程序；请保留整个 `win-unpacked` 文件夹一起使用。
 
 程序运行不需要额外安装 Node.js。安装包当前未进行代码签名，Windows 可能显示未知发布者。代码仓库不保存构建缓存或安装文件；可直接安装的程序和校验和通过 [GitHub Releases](https://github.com/yu2660/Workbench/releases) 提供。
@@ -83,6 +91,7 @@ node tests/operations.cjs
 python tests/inspect_pptx.py
 node tests/conflict.cjs
 node tests/cjk.cjs
+npm run test:navigation
 npm run licenses
 npm run dist
 node tests/packaged.cjs

@@ -64,6 +64,11 @@ const handlers = {
     const result = await shell.openPath(file); if (result) throw Error(result);
   },
   reveal: rel => { shell.showItemInFolder(library.resolve(rel)); },
+  setReaderFullscreen: enabled => {
+    if (typeof enabled !== 'boolean') throw Error('全屏状态无效');
+    win.setFullScreen(enabled);
+    return win.isFullScreen();
+  },
 };
 for (const [name, handler] of Object.entries(handlers)) ipcMain.handle('wb:' + name, (event, ...args) => {
   const execute = async () => {
@@ -90,6 +95,8 @@ else {
     win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     win.webContents.on('will-navigate', e => e.preventDefault());
     win.webContents.on('will-attach-webview', e => e.preventDefault());
+    win.on('enter-full-screen', () => win.webContents.send('wb:fullscreen', true));
+    win.on('leave-full-screen', () => win.webContents.send('wb:fullscreen', false));
     win.webContents.on('will-prevent-unload', e => {
       const choice = dialog.showMessageBoxSync(win, { type: 'warning', buttons: ['返回保存', '放弃未保存的批注并退出'], defaultId: 0, cancelId: 0, message: '还有批注没有写回原文件', detail: '请先重试保存；退出后未保存的批注会丢失。' });
       if (choice === 1) e.preventDefault();
